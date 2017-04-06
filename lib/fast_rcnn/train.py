@@ -100,32 +100,30 @@ class SolverWrapper(object):
         return outside_mul
 
 
-    def train_model(self, sess, max_iters):
-        """Network training loop."""
-
-        data_layer = get_data_layer(self.roidb, self.imdb.num_classes)
-
+    def compute_loss(self):
         # RPN
         # classification loss
-        rpn_cls_score = tf.reshape(self.net.get_output('rpn_cls_score_reshape'),[-1,2])
-        rpn_label = tf.reshape(self.net.get_output('rpn-data')[0],[-1])
-        rpn_cls_score = tf.reshape(tf.gather(rpn_cls_score,tf.where(tf.not_equal(rpn_label,-1))),[-1,2])
-        rpn_label = tf.reshape(tf.gather(rpn_label,tf.where(tf.not_equal(rpn_label,-1))),[-1])
-        rpn_cross_entropy = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=rpn_cls_score, labels=rpn_label))
+        rpn_cls_score = tf.reshape(self.net.get_output('rpn_cls_score_reshape'), [-1, 2])
+        rpn_label = tf.reshape(self.net.get_output('rpn-data')[0], [-1])
+        rpn_cls_score = tf.reshape(tf.gather(rpn_cls_score, tf.where(tf.not_equal(rpn_label, -1))), [-1, 2])
+        rpn_label = tf.reshape(tf.gather(rpn_label, tf.where(tf.not_equal(rpn_label, -1))), [-1])
+        rpn_cross_entropy = tf.reduce_mean(
+            tf.nn.sparse_softmax_cross_entropy_with_logits(logits=rpn_cls_score, labels=rpn_label))
 
         # bounding box regression L1 loss
         rpn_bbox_pred = self.net.get_output('rpn_bbox_pred')
-        rpn_bbox_targets = tf.transpose(self.net.get_output('rpn-data')[1],[0,2,3,1])
-        rpn_bbox_inside_weights = tf.transpose(self.net.get_output('rpn-data')[2],[0,2,3,1])
-        rpn_bbox_outside_weights = tf.transpose(self.net.get_output('rpn-data')[3],[0,2,3,1])
+        rpn_bbox_targets = tf.transpose(self.net.get_output('rpn-data')[1], [0, 2, 3, 1])
+        rpn_bbox_inside_weights = tf.transpose(self.net.get_output('rpn-data')[2], [0, 2, 3, 1])
+        rpn_bbox_outside_weights = tf.transpose(self.net.get_output('rpn-data')[3], [0, 2, 3, 1])
 
-        rpn_smooth_l1 = self._modified_smooth_l1(3.0, rpn_bbox_pred, rpn_bbox_targets, rpn_bbox_inside_weights, rpn_bbox_outside_weights)
+        rpn_smooth_l1 = self._modified_smooth_l1(3.0, rpn_bbox_pred, rpn_bbox_targets, rpn_bbox_inside_weights,
+                                                 rpn_bbox_outside_weights)
         rpn_loss_box = tf.reduce_mean(tf.reduce_sum(rpn_smooth_l1, reduction_indices=[1, 2, 3]))
- 
+
         # R-CNN
         # classification loss
         cls_score = self.net.get_output('cls_score')
-        label = tf.reshape(self.net.get_output('roi-data')[1],[-1])
+        label = tf.reshape(self.net.get_output('roi-data')[1], [-1])
         cross_entropy = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=cls_score, labels=label))
 
         # bounding box regression L1 loss
@@ -139,6 +137,14 @@ class SolverWrapper(object):
 
         # final loss
         loss = cross_entropy + loss_box + rpn_cross_entropy + rpn_loss_box
+        return loss, cross_entropy, loss_box, rpn_cross_entropy, rpn_loss_box
+
+
+    def train_model(self, sess, max_iters):
+        """Network training loop."""
+        data_layer = get_data_layer(self.roidb, self.imdb.num_classes)
+
+        loss, cross_entropy, loss_box, rpn_cross_entropy, rpn_loss_box = self.compute_loss()
 
         # optimizer and learning rate
         global_step = tf.Variable(0, trainable=False)

@@ -53,9 +53,9 @@ time python ./tools/dist_train_net.py --device ${DEV} --device_id ${DEV_ID} \
   --task_index 0 \
   --ps_hosts localhost:1120 \
   --worker_hosts localhost:1121 \
-  --pretrained_model data/pretrain_model/VGG_imagenet.npy \
-  --imdb_name ${TRAIN_IMDB} \
-  --max_iters ${ITERS} \
+  --weights data/pretrain_model/VGG_imagenet.npy \
+  --imdb ${TRAIN_IMDB} \
+  --iters ${ITERS} \
   --cfg experiments/cfgs/faster_rcnn_end2end.yml \
   --network VGGnet_train \
   ${EXTRA_ARGS}
