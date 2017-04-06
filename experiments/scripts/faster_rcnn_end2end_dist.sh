@@ -47,7 +47,7 @@ esac
 LOG="experiments/logs/faster_rcnn_end2end_${NET}_${EXTRA_ARGS_SLUG}.txt.`date +'%Y-%m-%d_%H-%M-%S'`"
 exec &> >(tee -a "$LOG")
 echo Logging output to "$LOG"
-
+#CUDA_VISIBLE_DEVICES='' python ./tools/dist_train_net.py --job_name ps --task_index 0 --ps_hosts localhost:1120 --worker_hosts localhost:1121 --weights data/pretrain_model/VGG_imagenet.npy --imdb voc_2007_trainval --iters 70000 --network VGGnet_train --cfg experiments/cfgs/faster_rcnn_end2end.yml
 time python ./tools/dist_train_net.py --device ${DEV} --device_id ${DEV_ID} \
   --job_name worker \
   --task_index 0 \
