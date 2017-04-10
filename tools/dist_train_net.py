@@ -80,9 +80,9 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
     num_workers = len(cluster_spec.as_dict()['worker'])
     num_parameter_servers = len(cluster_spec.as_dict()['ps'])
 
-    #if args.num_replicas_to_aggregate == -1:
+    # if args.num_replicas_to_aggregate == -1:
     #    num_replicas_to_aggregate = num_workers
-    #else:
+    # else:
     #    num_replicas_to_aggregate = args.num_replicas_to_aggregate
 
     assert num_workers > 0 and num_parameter_servers > 0, (' num_workers and '
@@ -102,22 +102,21 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
             log_device_placement=True)
 
         init_op = tf.global_variables_initializer()
-        # sv = tf.train.Supervisor(is_chief=is_chief,
-        #                         logdir=FLAGS.train_dir,
-        #                         init_op=init_op,
-        #                         summary_op=None,
-        #                         global_step=global_step,
-        #                         saver=saver,
-        #                         save_model_secs=FLAGS.save_interval_secs)
+        sv = tf.train.Supervisor(is_chief=is_chief,
+                                 logdir=output_dir,
+                                 init_op=init_op,
+                                 summary_op=None,
+                                 global_step=global_step,
+                                 saver=saver)
         ## Get a session.
-        # with sv.prepare_or_wait_for_session(target, config=sess_config) as sess:
-        #with tf.train.MonitoredTrainingSession(master=target, is_chief=is_chief,
+        sess = sv.prepare_or_wait_for_session(target, config=sess_config)
+        # with tf.train.MonitoredTrainingSession(master=target, is_chief=is_chief,
         #                                        checkpoint_dir=output_dir) as sess:
-        with tf.Session(target=target, config=sess_config) as sess:
-            sw = SolverWrapper(sess, saver, network, imdb, roidb, output_dir, pretrained_model=pretrained_model)
-            print('Solving...')
-            sw.train_model(sess, max_iters)
-            # loss, cross_entropy, loss_box, rpn_cross_entropy, rpn_loss_box = sw.compute_loss()
+        # with tf.Session(target=target, config=sess_config) as sess:
+        sw = SolverWrapper(sess, saver, network, imdb, roidb, output_dir, pretrained_model=pretrained_model)
+        print('Solving...')
+        sw.train_model(sess, max_iters)
+        # loss, cross_entropy, loss_box, rpn_cross_entropy, rpn_loss_box = sw.compute_loss()
 
 
 if __name__ == '__main__':

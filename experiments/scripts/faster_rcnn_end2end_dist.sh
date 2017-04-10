@@ -47,18 +47,39 @@ esac
 LOG="experiments/logs/faster_rcnn_end2end_${NET}_${EXTRA_ARGS_SLUG}.txt.`date +'%Y-%m-%d_%H-%M-%S'`"
 exec &> >(tee -a "$LOG")
 echo Logging output to "$LOG"
-#CUDA_VISIBLE_DEVICES='' python ./tools/dist_train_net.py --job_name ps --task_index 0 --ps_hosts localhost:1120 --worker_hosts localhost:1121 --weights data/pretrain_model/VGG_imagenet.npy --imdb voc_2007_trainval --iters 70000 --network VGGnet_train --cfg experiments/cfgs/faster_rcnn_end2end.yml
-time python ./tools/dist_train_net.py --device ${DEV} --device_id ${DEV_ID} \
-  --job_name worker \
-  --task_index 0 \
-  --ps_hosts localhost:1120 \
-  --worker_hosts localhost:1121 \
-  --weights data/pretrain_model/VGG_imagenet.npy \
-  --imdb ${TRAIN_IMDB} \
-  --iters ${ITERS} \
-  --cfg experiments/cfgs/faster_rcnn_end2end.yml \
-  --network VGGnet_train \
-  ${EXTRA_ARGS}
+#CUDA_VISIBLE_DEVICES=0
+#CUDA_VISIBLE_DEVICES=1
+case $DEV in
+  ps)
+    CUDA_VISIBLE_DEVICES='' python ./tools/dist_train_net.py \
+     --job_name ps \
+     --task_index 0 \
+     --ps_hosts localhost:1120 \
+     --worker_hosts localhost:1121 \
+     --weights data/pretrain_model/VGG_imagenet.npy \
+     --imdb ${TRAIN_IMDB} \
+     --iters ${ITERS} \
+     --network VGGnet_train \
+     --cfg experiments/cfgs/faster_rcnn_end2end.yml
+     ;;
+  worker)
+    time CUDA_VISIBLE_DEVICES=0 python ./tools/dist_train_net.py --device ${DEV} --device_id ${DEV_ID} \
+      --job_name worker \
+      --task_index 0 \
+      --ps_hosts localhost:1120 \
+      --worker_hosts localhost:1121 \
+      --weights data/pretrain_model/VGG_imagenet.npy \
+      --imdb ${TRAIN_IMDB} \
+      --iters ${ITERS} \
+      --cfg experiments/cfgs/faster_rcnn_end2end.yml \
+      --network VGGnet_train \
+      ${EXTRA_ARGS}
+      ;;
+  *)
+    echo "No dev given"
+    exit
+    ;;
+esac
 
 set +x
 NET_FINAL=`grep -B 1 "done solving" ${LOG} | grep "Wrote snapshot" | awk '{print $4}'`
