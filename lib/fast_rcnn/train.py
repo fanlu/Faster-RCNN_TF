@@ -103,7 +103,8 @@ class SolverWrapper(object):
     def compute_loss(self):
         # RPN
         # classification loss
-        rpn_cls_score = tf.reshape(self.net.get_output('rpn_cls_score_reshape'), [-1, 2])
+        rpn_cls_score_reshape = self.net.get_output('rpn_cls_score_reshape')
+        rpn_cls_score = tf.reshape(rpn_cls_score_reshape, [-1, 2])
         rpn_label = tf.reshape(self.net.get_output('rpn-data')[0], [-1])
         rpn_cls_score = tf.reshape(tf.gather(rpn_cls_score, tf.where(tf.not_equal(rpn_label, -1))), [-1, 2])
         rpn_label = tf.reshape(tf.gather(rpn_label, tf.where(tf.not_equal(rpn_label, -1))), [-1])
