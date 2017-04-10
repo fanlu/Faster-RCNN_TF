@@ -106,10 +106,10 @@ class SolverWrapper(object):
         rpn_cls_score_reshape = self.net.get_output('rpn_cls_score_reshape')
         rpn_cls_score = tf.reshape(rpn_cls_score_reshape, [-1, 2])
         rpn_label = tf.reshape(self.net.get_output('rpn-data')[0], [-1])
-        rpn_cls_score = tf.reshape(tf.gather(rpn_cls_score, tf.where(tf.not_equal(rpn_label, -1))), [-1, 2])
+        rpn_cls_score1 = tf.reshape(tf.gather(rpn_cls_score, tf.where(tf.not_equal(rpn_label, -1))), [-1, 2])
         rpn_label = tf.reshape(tf.gather(rpn_label, tf.where(tf.not_equal(rpn_label, -1))), [-1])
         rpn_cross_entropy = tf.reduce_mean(
-            tf.nn.sparse_softmax_cross_entropy_with_logits(logits=rpn_cls_score, labels=rpn_label))
+            tf.nn.sparse_softmax_cross_entropy_with_logits(logits=rpn_cls_score1, labels=rpn_label))
 
         # bounding box regression L1 loss
         rpn_bbox_pred = self.net.get_output('rpn_bbox_pred')

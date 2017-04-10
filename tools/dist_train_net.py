@@ -110,20 +110,23 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
                                  summary_op=None,
                                  global_step=global_step,
                                  saver=saver)
+        sw = SolverWrapper(None, saver, network, imdb, roidb, output_dir,
+                           pretrained_model=pretrained_model)
+
+        loss, cross_entropy, loss_box, rpn_cross_entropy, rpn_loss_box = sw.compute_loss()
+
         ## Get a session.
         sess = sv.prepare_or_wait_for_session(target, config=sess_config)
         # with tf.train.MonitoredTrainingSession(master=target, is_chief=is_chief,
         #                                        checkpoint_dir=output_dir) as sess:
         # with tf.Session(target=target, config=sess_config) as sess:
 
-        sw = SolverWrapper(sess, saver, network, imdb, roidb, output_dir,
-                           pretrained_model=pretrained_model)
+
         print('Solving...')
 
         """Network training loop."""
         data_layer = get_data_layer(roidb, imdb.num_classes)
 
-        loss, cross_entropy, loss_box, rpn_cross_entropy, rpn_loss_box = sw.compute_loss()
         lr = tf.train.exponential_decay(cfg.TRAIN.LEARNING_RATE, global_step,
                                         cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
         momentum = cfg.TRAIN.MOMENTUM
