@@ -141,6 +141,7 @@ class SolverWrapper(object):
         return loss, cross_entropy, loss_box, rpn_cross_entropy, rpn_loss_box
 
 
+
     def train_model(self, sess, max_iters):
         """Network training loop."""
         data_layer = get_data_layer(self.roidb, self.imdb.num_classes)
@@ -148,7 +149,7 @@ class SolverWrapper(object):
         loss, cross_entropy, loss_box, rpn_cross_entropy, rpn_loss_box = self.compute_loss()
 
         # optimizer and learning rate
-        global_step = tf.Variable(0, trainable=False)
+        global_step = tf.Variable(0, name="global_step", trainable=False)
         lr = tf.train.exponential_decay(cfg.TRAIN.LEARNING_RATE, global_step,
                                         cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
         momentum = cfg.TRAIN.MOMENTUM

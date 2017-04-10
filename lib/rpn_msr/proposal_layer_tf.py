@@ -33,7 +33,7 @@ def proposal_layer(rpn_cls_prob_reshape,rpn_bbox_pred,im_info,cfg_key,_feat_stri
     # take after_nms_topN proposals after NMS
     # return the top proposals (-> RoIs top, scores top)
     #layer_params = yaml.load(self.param_str_)
-    _anchors = generate_anchors(scales=np.array(anchor_scales))
+    _anchors = generate_anchors(scales=np.array(anchor_scales))  # (9,4)
     _num_anchors = _anchors.shape[0]
     rpn_cls_prob_reshape = np.transpose(rpn_cls_prob_reshape,[0,3,1,2])
     rpn_bbox_pred = np.transpose(rpn_bbox_pred,[0,3,1,2])
@@ -70,8 +70,32 @@ def proposal_layer(rpn_cls_prob_reshape,rpn_bbox_pred,im_info,cfg_key,_feat_stri
     shift_x = np.arange(0, width) * _feat_stride
     shift_y = np.arange(0, height) * _feat_stride
     shift_x, shift_y = np.meshgrid(shift_x, shift_y)
+
+    # [array([[0, 16, 32, ..., 592, 608, 624],
+    #         [0, 16, 32, ..., 592, 608, 624],
+    #         [0, 16, 32, ..., 592, 608, 624],
+    #         ...,
+    #         [0, 16, 32, ..., 592, 608, 624],
+    #         [0, 16, 32, ..., 592, 608, 624],
+    #         [0, 16, 32, ..., 592, 608, 624]]),
+    #  array([[0, 0, 0, ..., 0, 0, 0],
+    #         [16, 16, 16, ..., 16, 16, 16],
+    #         [32, 32, 32, ..., 32, 32, 32],
+    #         ...,
+    #         [432, 432, 432, ..., 432, 432, 432],
+    #         [448, 448, 448, ..., 448, 448, 448],
+    #         [464, 464, 464, ..., 464, 464, 464]])]
+
     shifts = np.vstack((shift_x.ravel(), shift_y.ravel(),
                         shift_x.ravel(), shift_y.ravel())).transpose()
+
+    # array([[0, 0, 0, 0],
+    #        [16, 0, 16, 0],
+    #        [32, 0, 32, 0],
+    #        ...,
+    #        [592, 464, 592, 464],
+    #        [608, 464, 608, 464],
+    #        [624, 464, 624, 464]])
 
     # Enumerate all shifted anchors:
     #
@@ -80,7 +104,7 @@ def proposal_layer(rpn_cls_prob_reshape,rpn_bbox_pred,im_info,cfg_key,_feat_stri
     # shift anchors (K, A, 4)
     # reshape to (K*A, 4) shifted anchors
     A = _num_anchors
-    K = shifts.shape[0]
+    K = shifts.shape[0]  # (1200, 4)
     anchors = _anchors.reshape((1, A, 4)) + \
               shifts.reshape((1, K, 4)).transpose((1, 0, 2))
     anchors = anchors.reshape((K * A, 4))
