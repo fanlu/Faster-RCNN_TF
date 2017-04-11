@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
+from tensorflow.python import pywrap_tensorflow
 import argparse
 import sys
 import pprint
@@ -78,6 +79,18 @@ def parse_args():
     return args
 
 
+def get_variables_in_checkpoint_file(self, file_name):
+    try:
+        reader = pywrap_tensorflow.NewCheckpointReader(file_name)
+        var_to_shape_map = reader.get_variable_to_shape_map()
+        return var_to_shape_map
+    except Exception as e:  # pylint: disable=broad-except
+        print(str(e))
+        if "corrupted compressed block contents" in str(e):
+            print("It's likely that your checkpoint file has been compressed "
+                  "with SNAPPY.")
+
+
 def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_model=None, max_iters=None):
     num_workers = len(cluster_spec.as_dict()['worker'])
     num_parameter_servers = len(cluster_spec.as_dict()['ps'])
@@ -109,8 +122,6 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
                            pretrained_model=pretrained_model)
 
         loss, cross_entropy, loss_box, rpn_cross_entropy, rpn_loss_box = sw.compute_loss()
-
-
 
         # with tf.train.MonitoredTrainingSession(master=target, is_chief=is_chief,
         #                                        checkpoint_dir=output_dir) as sess:
@@ -154,10 +165,32 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
         # train_op = _opt.minimize(loss, global_step=global_step)
 
         def load_pretrain(sess):
-            if sw.pretrained_model is not None:
-                print('Loading pretrained model '
-                      'weights from {:s}'.format(sw.pretrained_model))
-                sw.net.load(sw.pretrained_model, sess, sw.saver, True)
+            # if sw.pretrained_model is not None:
+            #     print('Loading pretrained model '
+            #           'weights from {:s}'.format(sw.pretrained_model))
+            #     sw.net.load(sw.pretrained_model, sess, sw.saver, True)
+            # Fresh train directly from ImageNet weights
+            print('Loading initial model weights from {:s}'.format(sw.pretrained_model))
+            variables = tf.global_variables()
+
+            # Only initialize the variables that were not initialized when the graph was built
+            sess.run(tf.variables_initializer(variables, name='init'))
+            var_keep_dic = get_variables_in_checkpoint_file(sw.pretrained_model)
+            variables_to_restore = []
+            var_to_dic = {}
+            # print(var_keep_dic)
+            for v in variables:
+                # exclude the conv weights that are fc weights in vgg16
+                if v.name == 'vgg_16/fc6/weights:0' or v.name == 'vgg_16/fc7/weights:0':
+                    var_to_dic[v.name] = v
+                    continue
+                if v.name.split(':')[0] in var_keep_dic:
+                    print('Varibles restored: %s' % v.name)
+                    variables_to_restore.append(v)
+
+            restorer = tf.train.Saver(variables_to_restore)
+            restorer.restore(sess, sw.pretrained_model)
+            print('Loaded.')
 
         sv = tf.train.Supervisor(is_chief=is_chief,
                                  logdir=output_dir,
@@ -172,7 +205,6 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
         if is_chief:
             sess.run(sync_init_op)
             sv.start_queue_runners(sess, [chief_queue_runner])
-
 
         last_snapshot_iter = -1
         timer = Timer()
