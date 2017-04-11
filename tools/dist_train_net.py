@@ -125,7 +125,8 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
         lr = tf.train.exponential_decay(cfg.TRAIN.LEARNING_RATE, global_step,
                                         cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
         momentum = cfg.TRAIN.MOMENTUM
-        opt = tf.train.MomentumOptimizer(lr, momentum)
+        opt = tf.train.GradientDescentOptimizer(lr)  # tf.train.MomentumOptimizer(lr, momentum)
+
         _opt = tf.train.SyncReplicasOptimizer(
             opt,
             replicas_to_aggregate=2,
@@ -152,9 +153,16 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
 
         # train_op = _opt.minimize(loss, global_step=global_step)
 
+        def load_pretrain(sess):
+            if sw.pretrained_model is not None:
+                print('Loading pretrained model '
+                      'weights from {:s}'.format(sw.pretrained_model))
+                sw.net.load(sw.pretrained_model, sess, sw.saver, True)
+
         sv = tf.train.Supervisor(is_chief=is_chief,
                                  logdir=output_dir,
                                  init_op=init_op,
+                                 init_fn=load_pretrain,
                                  summary_op=None,
                                  global_step=global_step,
                                  saver=saver)
@@ -165,10 +173,7 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
             sess.run(sync_init_op)
             sv.start_queue_runners(sess, [chief_queue_runner])
 
-        if sw.pretrained_model is not None:
-            print('Loading pretrained model '
-                  'weights from {:s}').format(sw.pretrained_model)
-            sw.net.load(sw.pretrained_model, sess, sw.saver, True)
+
         last_snapshot_iter = -1
         timer = Timer()
         for iter in range(max_iters):

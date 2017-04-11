@@ -56,7 +56,7 @@ case $DEV in
      --task_index 0 \
      --ps_hosts localhost:1120 \
      --worker_hosts localhost:1121 \
-     --weights data/pretrain_model/VGG_imagenet.npy \
+     --weights /export/fanlu/VGG_imagenet.npy \
      --imdb ${TRAIN_IMDB} \
      --iters ${ITERS} \
      --network VGGnet_train \
@@ -65,10 +65,10 @@ case $DEV in
   worker)
     time CUDA_VISIBLE_DEVICES=0 python ./tools/dist_train_net.py --device ${DEV} --device_id ${DEV_ID} \
       --job_name worker \
-      --task_index 0 \
+      --task_index $DEV_ID \
       --ps_hosts localhost:1120 \
       --worker_hosts localhost:1121 \
-      --weights data/pretrain_model/VGG_imagenet.npy \
+      --weights /export/fanlu/VGG_imagenet.npy \
       --imdb ${TRAIN_IMDB} \
       --iters ${ITERS} \
       --cfg experiments/cfgs/faster_rcnn_end2end.yml \
