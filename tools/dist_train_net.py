@@ -111,6 +111,7 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
         loss, cross_entropy, loss_box, rpn_cross_entropy, rpn_loss_box = sw.compute_loss()
 
 
+
         # with tf.train.MonitoredTrainingSession(master=target, is_chief=is_chief,
         #                                        checkpoint_dir=output_dir) as sess:
         # with tf.Session(target=target, config=sess_config) as sess:
@@ -131,16 +132,25 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
             total_num_replicas=2,
             name="dist_sync_replicas")
 
-        if is_chief:
-            local_init_op = _opt.chief_init_op
+        # Gather all of the losses including regularization losses.
+        # Compute gradients with respect to the loss.
+        grads = opt.compute_gradients(loss)
 
-        ready_for_local_init_op = _opt.ready_for_local_init_op
+        # Add histograms for gradients.
+        for grad, var in grads:
+            if grad is not None:
+                tf.summary.histogram(var.op.name + '/gradients', grad)
+
+        apply_gradients_op = _opt.apply_gradients(grads, global_step=global_step)
+
+        with tf.control_dependencies([apply_gradients_op]):
+            train_op = tf.identity(loss, name='train_op')
 
         # Initial token and chief queue runners required by the sync_replicas mode
         chief_queue_runner = _opt.get_chief_queue_runner()
         sync_init_op = _opt.get_init_tokens_op()
 
-        train_op = _opt.minimize(loss, global_step=global_step)
+        # train_op = _opt.minimize(loss, global_step=global_step)
 
         sv = tf.train.Supervisor(is_chief=is_chief,
                                  logdir=output_dir,
