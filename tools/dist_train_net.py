@@ -104,19 +104,13 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
             log_device_placement=True)
 
         init_op = tf.global_variables_initializer()
-        sv = tf.train.Supervisor(is_chief=is_chief,
-                                 logdir=output_dir,
-                                 init_op=init_op,
-                                 summary_op=None,
-                                 global_step=global_step,
-                                 saver=saver)
+
         sw = SolverWrapper(None, saver, network, imdb, roidb, output_dir,
                            pretrained_model=pretrained_model)
 
         loss, cross_entropy, loss_box, rpn_cross_entropy, rpn_loss_box = sw.compute_loss()
 
-        ## Get a session.
-        sess = sv.prepare_or_wait_for_session(target, config=sess_config)
+
         # with tf.train.MonitoredTrainingSession(master=target, is_chief=is_chief,
         #                                        checkpoint_dir=output_dir) as sess:
         # with tf.Session(target=target, config=sess_config) as sess:
@@ -147,6 +141,15 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
         sync_init_op = _opt.get_init_tokens_op()
 
         train_op = _opt.minimize(loss, global_step=global_step)
+
+        sv = tf.train.Supervisor(is_chief=is_chief,
+                                 logdir=output_dir,
+                                 init_op=init_op,
+                                 summary_op=None,
+                                 global_step=global_step,
+                                 saver=saver)
+        ## Get a session.
+        sess = sv.prepare_or_wait_for_session(target, config=sess_config)
 
         if is_chief:
             sess.run(sync_init_op)
