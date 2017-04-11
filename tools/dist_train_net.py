@@ -79,7 +79,7 @@ def parse_args():
     return args
 
 
-def get_variables_in_checkpoint_file(self, file_name):
+def get_variables_in_checkpoint_file(file_name):
     try:
         reader = pywrap_tensorflow.NewCheckpointReader(file_name)
         var_to_shape_map = reader.get_variable_to_shape_map()
@@ -164,31 +164,33 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
 
         # train_op = _opt.minimize(loss, global_step=global_step)
 
+        print('Loading initial model weights from {:s}'.format(sw.pretrained_model))
+        variables = tf.global_variables()
+
+        # Only initialize the variables that were not initialized when the graph was built
+        # sess.run(tf.variables_initializer(variables, name='init'))
+        var_keep_dic = get_variables_in_checkpoint_file(sw.pretrained_model)
+        variables_to_restore = []
+        var_to_dic = {}
+        # print(var_keep_dic)
+        for v in variables:
+            # exclude the conv weights that are fc weights in vgg16
+            if v.name == 'vgg_16/fc6/weights:0' or v.name == 'vgg_16/fc7/weights:0':
+                var_to_dic[v.name] = v
+                continue
+            if v.name.split(':')[0] in var_keep_dic:
+                print('Varibles restored: %s' % v.name)
+                variables_to_restore.append(v)
+
+        restorer = tf.train.Saver(variables_to_restore)
+
         def load_pretrain(sess):
             # if sw.pretrained_model is not None:
             #     print('Loading pretrained model '
             #           'weights from {:s}'.format(sw.pretrained_model))
             #     sw.net.load(sw.pretrained_model, sess, sw.saver, True)
             # Fresh train directly from ImageNet weights
-            print('Loading initial model weights from {:s}'.format(sw.pretrained_model))
-            variables = tf.global_variables()
 
-            # Only initialize the variables that were not initialized when the graph was built
-            sess.run(tf.variables_initializer(variables, name='init'))
-            var_keep_dic = get_variables_in_checkpoint_file(sw.pretrained_model)
-            variables_to_restore = []
-            var_to_dic = {}
-            # print(var_keep_dic)
-            for v in variables:
-                # exclude the conv weights that are fc weights in vgg16
-                if v.name == 'vgg_16/fc6/weights:0' or v.name == 'vgg_16/fc7/weights:0':
-                    var_to_dic[v.name] = v
-                    continue
-                if v.name.split(':')[0] in var_keep_dic:
-                    print('Varibles restored: %s' % v.name)
-                    variables_to_restore.append(v)
-
-            restorer = tf.train.Saver(variables_to_restore)
             restorer.restore(sess, sw.pretrained_model)
             print('Loaded.')
 
@@ -242,7 +244,7 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
                 print
                 'iter: %d / %d, total loss: %.4f, rpn_loss_cls: %.4f, rpn_loss_box: %.4f, loss_cls: %.4f, loss_box: %.4f, lr: %f' % \
                 (iter + 1, max_iters, rpn_loss_cls_value + rpn_loss_box_value + loss_cls_value + loss_box_value,
-                 rpn_loss_cls_value, rpn_loss_box_value, loss_cls_value, loss_box_value, lr.eval())
+                 rpn_loss_cls_value, rpn_loss_box_value, loss_cls_value, loss_box_value, sess.run(lr))
                 print
                 'speed: {:.3f}s / iter'.format(timer.average_time)
 
