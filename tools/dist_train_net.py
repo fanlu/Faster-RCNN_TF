@@ -118,6 +118,8 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
 
         init_op = tf.global_variables_initializer()
 
+        summary_op = tf.summary.merge_all()
+
         sw = SolverWrapper(None, saver, network, imdb, roidb, output_dir,
                            pretrained_model=pretrained_model)
 
@@ -127,6 +129,30 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
         #                                        checkpoint_dir=output_dir) as sess:
         # with tf.Session(target=target, config=sess_config) as sess:
 
+        # Gather all of the losses including regularization losses.
+        # losses = tf.get_collection("_losses")
+        # losses += tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+
+        total_loss = tf.add_n(loss, name='total_loss')
+
+        if is_chief:
+            # Compute the moving average of all individual losses and the
+            # total loss.
+            loss_averages = tf.train.ExponentialMovingAverage(0.9, name='avg')
+            loss_averages_op = loss_averages.apply(loss + [total_loss])
+
+            # Attach a scalar summmary to all individual losses and the total loss;
+            # do the same for the averaged version of the losses.
+            for l in loss + [total_loss]:
+                loss_name = l.op.name
+                # Name each loss as '(raw)' and name the moving average version of the
+                # loss as the original loss name.
+                tf.summary.scalar(loss_name + ' (raw)', l)
+                tf.summary.scalar(loss_name, loss_averages.average(l))
+
+            # Add dependency to compute loss_averages.
+            with tf.control_dependencies([loss_averages_op]):
+                total_loss = tf.identity(total_loss)
 
         print('Solving...')
 
@@ -146,7 +172,8 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
 
         # Gather all of the losses including regularization losses.
         # Compute gradients with respect to the loss.
-        grads = opt.compute_gradients(loss)
+        # grads = opt.compute_gradients(loss)
+        grads = opt.compute_gradients(total_loss)
 
         # Add histograms for gradients.
         for grad, var in grads:
@@ -156,7 +183,8 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
         apply_gradients_op = _opt.apply_gradients(grads, global_step=global_step)
 
         with tf.control_dependencies([apply_gradients_op]):
-            train_op = tf.identity(loss, name='train_op')
+            # train_op = tf.identity(loss, name='train_op')
+            train_op = tf.identity(total_loss, name='train_op')
 
         # Initial token and chief queue runners required by the sync_replicas mode
         chief_queue_runner = _opt.get_chief_queue_runner()
@@ -210,43 +238,63 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
 
         last_snapshot_iter = -1
         timer = Timer()
-        for iter in range(max_iters):
-            # get one batch
-            blobs = data_layer.forward()
+        next_summary_time = time.time() + cfg.TRAIN.save_summaries_secs
+        while not sv.should_stop():
+        # for iter in range(max_iters):
+            try:
 
-            # Make one SGD update
-            feed_dict = {sw.net.data: blobs['data'], sw.net.im_info: blobs['im_info'], sw.net.keep_prob: 0.5, \
-                         sw.net.gt_boxes: blobs['gt_boxes']}
+                # get one batch
+                blobs = data_layer.forward()
 
-            run_options = None
-            run_metadata = None
-            if cfg.TRAIN.DEBUG_TIMELINE:
-                run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-                run_metadata = tf.RunMetadata()
+                # Make one SGD update
+                feed_dict = {sw.net.data: blobs['data'], sw.net.im_info: blobs['im_info'], sw.net.keep_prob: 0.5, \
+                             sw.net.gt_boxes: blobs['gt_boxes']}
 
-            timer.tic()
+                run_options = None
+                run_metadata = None
+                if cfg.TRAIN.DEBUG_TIMELINE:
+                    run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+                    run_metadata = tf.RunMetadata()
 
-            rpn_loss_cls_value, rpn_loss_box_value, loss_cls_value, loss_box_value, _ = sess.run(
-                [rpn_cross_entropy, rpn_loss_box, cross_entropy, loss_box, train_op],
-                feed_dict=feed_dict,
-                options=run_options,
-                run_metadata=run_metadata)
+                timer.tic()
 
-            timer.toc()
+                rpn_loss_cls_value, rpn_loss_box_value, loss_cls_value, loss_box_value, _, step = sess.run(
+                    [rpn_cross_entropy, rpn_loss_box, cross_entropy, loss_box, train_op, global_step],
+                    feed_dict=feed_dict,
+                    options=run_options,
+                    run_metadata=run_metadata)
 
-            if cfg.TRAIN.DEBUG_TIMELINE:
-                trace = timeline.Timeline(step_stats=run_metadata.step_stats)
-                trace_file = open(str(long(time.time() * 1000)) + '-train-timeline.ctf.json', 'w')
-                trace_file.write(trace.generate_chrome_trace_format(show_memory=False))
-                trace_file.close()
+                if step > max_iters:
+                    break
 
-            if (iter + 1) % (cfg.TRAIN.DISPLAY) == 0:
-                print
-                'iter: %d / %d, total loss: %.4f, rpn_loss_cls: %.4f, rpn_loss_box: %.4f, loss_cls: %.4f, loss_box: %.4f, lr: %f' % \
-                (iter + 1, max_iters, rpn_loss_cls_value + rpn_loss_box_value + loss_cls_value + loss_box_value,
-                 rpn_loss_cls_value, rpn_loss_box_value, loss_cls_value, loss_box_value, sess.run(lr))
-                print
-                'speed: {:.3f}s / iter'.format(timer.average_time)
+                timer.toc()
+
+                if cfg.TRAIN.DEBUG_TIMELINE:
+                    trace = timeline.Timeline(step_stats=run_metadata.step_stats)
+                    trace_file = open(str(long(time.time() * 1000)) + '-train-timeline.ctf.json', 'w')
+                    trace_file.write(trace.generate_chrome_trace_format(show_memory=False))
+                    trace_file.close()
+
+                if (step + 1) % (cfg.TRAIN.DISPLAY) == 0:
+                    print(
+                        'iter: %d / %d, total loss: %.4f, rpn_loss_cls: %.4f, rpn_loss_box: %.4f, loss_cls: %.4f, loss_box: %.4f, lr: %f' % \
+                        (step + 1, max_iters, rpn_loss_cls_value + rpn_loss_box_value + loss_cls_value + loss_box_value,
+                         rpn_loss_cls_value, rpn_loss_box_value, loss_cls_value, loss_box_value, sess.run(lr)))
+                    print('speed: {:.3f}s / iter'.format(timer.average_time))
+
+                # Determine if the summary_op should be run on the chief worker.
+                if is_chief and next_summary_time < time.time():
+                    tf.logging.info('Running Summary operation on the chief.')
+                    summary_str = sess.run(summary_op)
+                    sv.summary_computed(sess, summary_str)
+                    tf.logging.info('Finished running Summary operation.')
+
+                    # Determine the next time for running the summary.
+                    next_summary_time += cfg.TRAIN.save_summaries_secs
+            except:
+              if is_chief:
+                tf.logging.info('Chief got exception while running!')
+              raise
 
 
 if __name__ == '__main__':

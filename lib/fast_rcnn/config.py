@@ -149,6 +149,8 @@ __C.TRAIN.RPN_POSITIVE_WEIGHT = -1.0
 # Enable timeline generation
 __C.TRAIN.DEBUG_TIMELINE = False
 
+__C.TRAIN.save_summaries_secs = 600
+
 #
 # Testing options
 #
