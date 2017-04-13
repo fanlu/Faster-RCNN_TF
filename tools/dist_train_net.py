@@ -95,10 +95,10 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
     num_workers = len(cluster_spec.as_dict()['worker'])
     num_parameter_servers = len(cluster_spec.as_dict()['ps'])
 
-    # if args.num_replicas_to_aggregate == -1:
-    #    num_replicas_to_aggregate = num_workers
-    # else:
-    #    num_replicas_to_aggregate = args.num_replicas_to_aggregate
+    if args.num_replicas_to_aggregate == -1:
+       num_replicas_to_aggregate = num_workers
+    else:
+       num_replicas_to_aggregate = args.num_replicas_to_aggregate
 
     assert num_workers > 0 and num_parameter_servers > 0, (' num_workers and '
                                                            'num_parameter_servers'
@@ -111,7 +111,7 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
         global_step = tf.contrib.framework.get_or_create_global_step()
 
         roidb = filter_roidb(roidb)
-        saver = tf.train.Saver(max_to_keep=100)
+        saver = tf.train.Saver(max_to_keep=5)
         sess_config = tf.ConfigProto(
             allow_soft_placement=True,
             log_device_placement=True)
@@ -169,31 +169,34 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
 
         _opt = tf.train.SyncReplicasOptimizer(
             opt,
-            replicas_to_aggregate=2,
-            total_num_replicas=2,
+            replicas_to_aggregate=num_replicas_to_aggregate,
+            total_num_replicas=num_workers,
             name="dist_sync_replicas")
 
         # Gather all of the losses including regularization losses.
         # Compute gradients with respect to the loss.
         # grads = opt.compute_gradients(loss)
-        grads = opt.compute_gradients(total_loss)
+        # grads = _opt.compute_gradients(total_loss)
+        #
+        # # Add histograms for gradients.
+        # for grad, var in grads:
+        #     if grad is not None:
+        #         tf.summary.histogram(var.op.name + '/gradients', grad)
+        #
+        # apply_gradients_op = _opt.apply_gradients(grads, global_step=global_step)
+        #
+        # with tf.control_dependencies([apply_gradients_op]):
+        #     # train_op = tf.identity(loss, name='train_op')
+        #     train_op = tf.identity(total_loss, name='train_op')
 
-        # Add histograms for gradients.
-        for grad, var in grads:
-            if grad is not None:
-                tf.summary.histogram(var.op.name + '/gradients', grad)
-
-        apply_gradients_op = _opt.apply_gradients(grads, global_step=global_step)
-
-        with tf.control_dependencies([apply_gradients_op]):
-            # train_op = tf.identity(loss, name='train_op')
-            train_op = tf.identity(total_loss, name='train_op')
+        train_op = _opt.minimize(total_loss, global_step=global_step)
 
         # Initial token and chief queue runners required by the sync_replicas mode
-        chief_queue_runner = _opt.get_chief_queue_runner()
-        sync_init_op = _opt.get_init_tokens_op()
+        if is_chief:
+            chief_queue_runner = _opt.get_chief_queue_runner()
+            sync_init_op = _opt.get_init_tokens_op()
 
-        # train_op = _opt.minimize(loss, global_step=global_step)
+
 
         print('Loading initial model weights from {:s}'.format(sw.pretrained_model))
         variables = tf.global_variables()
@@ -221,8 +224,8 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
             #           'weights from {:s}'.format(sw.pretrained_model))
             #     sw.net.load(sw.pretrained_model, sess, sw.saver, True)
             # Fresh train directly from ImageNet weights
-
-            restorer.restore(sess, sw.pretrained_model)
+            if is_chief:
+                restorer.restore(sess, sw.pretrained_model)
             print('Loaded.')
 
         sv = tf.train.Supervisor(is_chief=is_chief,
@@ -288,8 +291,8 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
                 # Determine if the summary_op should be run on the chief worker.
                 if is_chief and next_summary_time < time.time():
                     tf.logging.info('Running Summary operation on the chief.')
-                    summary_str = sess.run(summary_op)
-                    sv.summary_computed(sess, summary_str)
+                    # summary_str = sess.run(summary_op)
+                    # sv.summary_computed(sess, summary_str)
                     tf.logging.info('Finished running Summary operation.')
 
                     # Determine the next time for running the summary.
