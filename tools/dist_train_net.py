@@ -125,34 +125,36 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
 
         loss, cross_entropy, loss_box, rpn_cross_entropy, rpn_loss_box = sw.compute_loss()
 
+        tf.add_to_collection("_losses", tf.reshape(loss, ()))
         # with tf.train.MonitoredTrainingSession(master=target, is_chief=is_chief,
         #                                        checkpoint_dir=output_dir) as sess:
         # with tf.Session(target=target, config=sess_config) as sess:
 
         # Gather all of the losses including regularization losses.
-        # losses = tf.get_collection("_losses")
+        losses = tf.get_collection("_losses")
         # losses += tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
 
-        total_loss = tf.add_n(loss, name='total_loss')
+        total_loss = tf.add_n(losses, name='total_loss')
 
         if is_chief:
             # Compute the moving average of all individual losses and the
             # total loss.
-            loss_averages = tf.train.ExponentialMovingAverage(0.9, name='avg')
-            loss_averages_op = loss_averages.apply(loss + [total_loss])
+            # loss_averages = tf.train.ExponentialMovingAverage(0.9, name='avg')
+            # loss_averages_op = loss_averages.apply([total_loss])
 
             # Attach a scalar summmary to all individual losses and the total loss;
             # do the same for the averaged version of the losses.
-            for l in loss + [total_loss]:
-                loss_name = l.op.name
-                # Name each loss as '(raw)' and name the moving average version of the
-                # loss as the original loss name.
-                tf.summary.scalar(loss_name + ' (raw)', l)
-                tf.summary.scalar(loss_name, loss_averages.average(l))
+            # for l in losses + [total_loss]:
+            #     loss_name = l.op.name
+            #     # Name each loss as '(raw)' and name the moving average version of the
+            #     # loss as the original loss name.
+            #     tf.summary.scalar(loss_name + ' (raw)', l)
+            #     tf.summary.scalar(loss_name, loss_averages.average(l))
 
             # Add dependency to compute loss_averages.
-            with tf.control_dependencies([loss_averages_op]):
-                total_loss = tf.identity(total_loss)
+            # with tf.control_dependencies([loss_averages_op]):
+            #     total_loss = tf.identity(total_loss)
+            total_loss = tf.reduce_mean(total_loss)
 
         print('Solving...')
 
@@ -162,7 +164,8 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
         lr = tf.train.exponential_decay(cfg.TRAIN.LEARNING_RATE, global_step,
                                         cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
         momentum = cfg.TRAIN.MOMENTUM
-        opt = tf.train.GradientDescentOptimizer(lr)  # tf.train.MomentumOptimizer(lr, momentum)
+        # opt = tf.train.GradientDescentOptimizer(lr)  #
+        opt = tf.train.MomentumOptimizer(lr, momentum)
 
         _opt = tf.train.SyncReplicasOptimizer(
             opt,
