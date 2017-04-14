@@ -95,10 +95,10 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
     num_workers = len(cluster_spec.as_dict()['worker'])
     num_parameter_servers = len(cluster_spec.as_dict()['ps'])
 
-    if args.num_replicas_to_aggregate == -1:
-       num_replicas_to_aggregate = num_workers
-    else:
-       num_replicas_to_aggregate = args.num_replicas_to_aggregate
+    # if args.num_replicas_to_aggregate == -1:
+    num_replicas_to_aggregate = num_workers
+    # else:
+    #    num_replicas_to_aggregate = args.num_replicas_to_aggregate
 
     assert num_workers > 0 and num_parameter_servers > 0, (' num_workers and '
                                                            'num_parameter_servers'
@@ -164,8 +164,8 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
         lr = tf.train.exponential_decay(cfg.TRAIN.LEARNING_RATE, global_step,
                                         cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
         momentum = cfg.TRAIN.MOMENTUM
-        # opt = tf.train.GradientDescentOptimizer(lr)  #
-        opt = tf.train.MomentumOptimizer(lr, momentum)
+        opt = tf.train.GradientDescentOptimizer(lr)  #
+        #opt = tf.train.MomentumOptimizer(lr, momentum)
 
         _opt = tf.train.SyncReplicasOptimizer(
             opt,
@@ -203,29 +203,29 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
 
         # Only initialize the variables that were not initialized when the graph was built
         # sess.run(tf.variables_initializer(variables, name='init'))
-        var_keep_dic = get_variables_in_checkpoint_file(sw.pretrained_model)
-        variables_to_restore = []
-        var_to_dic = {}
-        # print(var_keep_dic)
-        for v in variables:
-            # exclude the conv weights that are fc weights in vgg16
-            if v.name == 'vgg_16/fc6/weights:0' or v.name == 'vgg_16/fc7/weights:0':
-                var_to_dic[v.name] = v
-                continue
-            if v.name.split(':')[0] in var_keep_dic:
-                print('Varibles restored: %s' % v.name)
-                variables_to_restore.append(v)
-
-        restorer = tf.train.Saver(variables_to_restore)
+        # var_keep_dic = get_variables_in_checkpoint_file(sw.pretrained_model)
+        # variables_to_restore = []
+        # var_to_dic = {}
+        # # print(var_keep_dic)
+        # for v in variables:
+        #     # exclude the conv weights that are fc weights in vgg16
+        #     if v.name == 'vgg_16/fc6/weights:0' or v.name == 'vgg_16/fc7/weights:0':
+        #         var_to_dic[v.name] = v
+        #         continue
+        #     if v.name.split(':')[0] in var_keep_dic:
+        #         print('Varibles restored: %s' % v.name)
+        #         variables_to_restore.append(v)
+        #
+        # restorer = tf.train.Saver(variables_to_restore)
 
         def load_pretrain(sess):
-            # if sw.pretrained_model is not None:
-            #     print('Loading pretrained model '
-            #           'weights from {:s}'.format(sw.pretrained_model))
-            #     sw.net.load(sw.pretrained_model, sess, sw.saver, True)
+            if sw.pretrained_model is not None:
+                print('Loading pretrained model '
+                      'weights from {:s}'.format(sw.pretrained_model))
+                sw.net.load(sw.pretrained_model, sess, sw.saver, True)
             # Fresh train directly from ImageNet weights
-            if is_chief:
-                restorer.restore(sess, sw.pretrained_model)
+            # if is_chief:
+            #     restorer.restore(sess, sw.pretrained_model)
             print('Loaded.')
 
         sv = tf.train.Supervisor(is_chief=is_chief,

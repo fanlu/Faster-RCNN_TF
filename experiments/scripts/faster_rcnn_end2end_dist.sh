@@ -67,7 +67,7 @@ case $DEV in
       --job_name worker \
       --task_index ${DEV_ID} \
       --ps_hosts localhost:1120 \
-      --worker_hosts localhost:1121 \
+      --worker_hosts localhost:1121,localhost:1122 \
       --weights /export/fanlu/VGG_imagenet.npy \
       --imdb ${TRAIN_IMDB} \
       --iters ${ITERS} \

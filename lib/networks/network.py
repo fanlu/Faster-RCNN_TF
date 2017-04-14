@@ -52,7 +52,8 @@ class Network(object):
                     for subkey in data_dict[key]:
                         try:
                             var = tf.get_variable(subkey)
-                            session.run(var.assign(data_dict[key][subkey]))
+                            var.load(data_dict[key][subkey], session)
+                            # session.run(var.assign(data_dict[key][subkey]))
                             print "assign pretrain model " + subkey + " to " + key
                         except ValueError:
                             print "ignore " + key
