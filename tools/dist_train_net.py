@@ -228,10 +228,16 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
             #     restorer.restore(sess, sw.pretrained_model)
             print('Loaded.')
 
+        from tensorflow.python.framework import ops
+        graph = ops.get_default_graph()
+        if not is_chief:
+            for op in graph.get_operations():
+                print(op.type, " and ", op.device)
+
         sv = tf.train.Supervisor(is_chief=is_chief,
                                  logdir=output_dir,
                                  init_op=init_op,
-                                 init_fn=load_pretrain,
+                                 # init_fn=load_pretrain,
                                  summary_op=None,
                                  global_step=global_step,
                                  saver=saver)
@@ -351,6 +357,15 @@ if __name__ == '__main__':
 
     if args.job_name == 'ps':
         # `ps` jobs wait for incoming connections from the workers.
+        sess = tf.Session(server.target)
+        if args.pretrained_model is not None:
+            print('Loading pretrained model '
+                  'weights from {:s}'.format(args.pretrained_model))
+            network.load(args.pretrained_model, sess, None, True)
+        # Fresh train directly from ImageNet weights
+        # if is_chief:
+        #     restorer.restore(sess, sw.pretrained_model)
+        print('Loaded.')
         server.join()
     else:
         # `worker` jobs will actually do the work.
