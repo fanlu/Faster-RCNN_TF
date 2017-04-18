@@ -3,7 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
-
+from tensorflow.python import pywrap_tensorflow
 import argparse
 import sys
 import pprint
@@ -77,6 +77,17 @@ def parse_args():
 
     args = parser.parse_args()
     return args
+
+def get_variables_in_checkpoint_file(file_name):
+    try:
+        reader = pywrap_tensorflow.NewCheckpointReader(file_name)
+        var_to_shape_map = reader.get_variable_to_shape_map()
+        return var_to_shape_map
+    except Exception as e:  # pylint: disable=broad-except
+        print(str(e))
+        if "corrupted compressed block contents" in str(e):
+            print("It's likely that your checkpoint file has been compressed "
+                  "with SNAPPY.")
 
 
 def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_model=None, max_iters=None):
@@ -187,15 +198,75 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
         # Only initialize the variables that were not initialized when the graph was built
         # sess.run(tf.variables_initializer(variables, name='init'))
 
+        variables = tf.global_variables()
+        var_keep_dic = get_variables_in_checkpoint_file(sw.pretrained_model)
+        variables_to_restore = []
+        var_to_dic = {}
+        print(var_keep_dic)
+        # {'vgg_16/conv4/conv4_1/weights': [3, 3, 256, 512], 'vgg_16/conv5/conv5_1/biases': [512],
+        #  'vgg_16/fc6/weights': [7, 7, 512, 4096], 'vgg_16/fc7/weights': [1, 1, 4096, 4096],
+        #  'vgg_16/conv5/conv5_1/weights': [3, 3, 512, 512], 'vgg_16/mean_rgb': [3],
+        #  'vgg_16/conv3/conv3_2/weights': [3, 3, 256, 256], 'vgg_16/conv4/conv4_3/biases': [512],
+        #  'vgg_16/conv5/conv5_2/biases': [512], 'vgg_16/conv3/conv3_3/biases': [256],
+        #  'vgg_16/conv1/conv1_2/biases': [64], 'vgg_16/conv2/conv2_2/weights': [3, 3, 128, 128],
+        #  'vgg_16/fc8/weights': [1, 1, 4096, 1000], 'global_step': [], 'vgg_16/conv3/conv3_3/weights': [3, 3, 256, 256],
+        #  'vgg_16/conv4/conv4_2/weights': [3, 3, 512, 512], 'vgg_16/conv2/conv2_1/weights': [3, 3, 64, 128],
+        #  'vgg_16/conv4/conv4_2/biases': [512], 'vgg_16/fc6/biases': [4096], 'vgg_16/conv2/conv2_2/biases': [128],
+        #  'vgg_16/conv2/conv2_1/biases': [128], 'vgg_16/conv4/conv4_3/weights': [3, 3, 512, 512],
+        #  'vgg_16/conv3/conv3_2/biases': [256], 'vgg_16/conv3/conv3_1/biases': [256],
+        #  'vgg_16/conv1/conv1_1/weights': [3, 3, 3, 64], 'vgg_16/conv1/conv1_2/weights': [3, 3, 64, 64],
+        #  'vgg_16/fc8/biases': [1000], 'vgg_16/conv3/conv3_1/weights': [3, 3, 128, 256],
+        #  'vgg_16/conv4/conv4_1/biases': [512], 'vgg_16/conv5/conv5_2/weights': [3, 3, 512, 512],
+        #  'vgg_16/conv5/conv5_3/biases': [512], 'vgg_16/conv5/conv5_3/weights': [3, 3, 512, 512],
+        #  'vgg_16/fc7/biases': [4096], 'vgg_16/conv1/conv1_1/biases': [64]}
+        variables_to_restore = {
+            # 'vgg_16/conv4/conv4_1/weights': slim.get_unique_variable('conv4_1/weights:0'),
+            # 'vgg_16/conv5/conv5_1/biases': slim.get_unique_variable('conv5_1/biases:0'),
+            'vgg_16/conv1/conv1_1/weights': slim.get_unique_variable('conv1_1/weights:0'),
+            'vgg_16/conv1/conv1_1/biases:': slim.get_unique_variable('conv1_1/biases:0'),
+            'vgg_16/conv1/conv1_2/weights': slim.get_unique_variable('conv1_2/weights:0'),
+            'vgg_16/conv1/conv1_2/biases:': slim.get_unique_variable('conv1_2/biases:0'),
+            'vgg_16/conv2/conv2_1/weights': slim.get_unique_variable('conv2_1/weights:0'),
+            'vgg_16/conv2/conv2_1/biases:': slim.get_unique_variable('conv2_1/biases:0'),
+            'vgg_16/conv2/conv2_2/weights': slim.get_unique_variable('conv2_2/weights:0'),
+            'vgg_16/conv2/conv2_2/biases:': slim.get_unique_variable('conv2_2/biases:0'),
+            'vgg_16/conv3/conv3_1/weights': slim.get_unique_variable('conv3_1/weights:0'),
+            'vgg_16/conv3/conv3_1/biases:': slim.get_unique_variable('conv3_1/biases:0'),
+            'vgg_16/conv3/conv3_2/weights': slim.get_unique_variable('conv3_2/weights:0'),
+            'vgg_16/conv3/conv3_2/biases:': slim.get_unique_variable('conv3_2/biases:0'),
+            'vgg_16/conv3/conv3_3/weights': slim.get_unique_variable('conv3_3/weights:0'),
+            'vgg_16/conv3/conv3_3/biases:': slim.get_unique_variable('conv3_3/biases:0'),
+            'vgg_16/conv4/conv4_1/weights': slim.get_unique_variable('conv4_1/weights:0'),
+            'vgg_16/conv4/conv4_1/biases:': slim.get_unique_variable('conv4_1/biases:0'),
+            'vgg_16/conv4/conv4_2/weights': slim.get_unique_variable('conv4_2/weights:0'),
+            'vgg_16/conv4/conv4_2/biases:': slim.get_unique_variable('conv4_2/biases:0'),
+            'vgg_16/conv4/conv4_3/weights': slim.get_unique_variable('conv4_3/weights:0'),
+            'vgg_16/conv4/conv4_3/biases:': slim.get_unique_variable('conv4_3/biases:0'),
+            'vgg_16/conv5/conv5_1/weights': slim.get_unique_variable('conv5_1/weights:0'),
+            'vgg_16/conv5/conv5_1/biases:': slim.get_unique_variable('conv5_1/biases:0'),
+            'vgg_16/conv5/conv5_2/weights': slim.get_unique_variable('conv5_2/weights:0'),
+            'vgg_16/conv5/conv5_2/biases:': slim.get_unique_variable('conv5_2/biases:0'),
+            'vgg_16/conv5/conv5_3/weights': slim.get_unique_variable('conv5_3/weights:0'),
+            'vgg_16/conv5/conv5_3/biases:': slim.get_unique_variable('conv5_3/biases:0')
+        }
+        # for v in variables:
+        #     print("cur v name is ", v.name)
+        #     # exclude the conv weights that are fc weights in vgg16
+        #     if v.name == 'vgg_16/fc6/weights:0' or v.name == 'vgg_16/fc7/weights:0':
+        #         var_to_dic[v.name] = v
+        #         continue
+        #     if v.name.split(':')[0] in var_keep_dic:
+        #         print('Varibles restored: %s' % v.name)
+        #         variables_to_restore.append(v)
+
+        restorer = tf.train.Saver(variables_to_restore)
+
         def load_pretrain(sess):
             print('Loading initial model weights from {:s}'.format(sw.pretrained_model))
             if sw.pretrained_model is not None:
                 print('Loading pretrained model '
                       'weights from {:s}'.format(sw.pretrained_model))
-                sw.net.load(sw.pretrained_model, sess, sw.saver, True)
-            # Fresh train directly from ImageNet weights
-            # if is_chief:
-            #     restorer.restore(sess, sw.pretrained_model)
+                sw.net.load(sw.pretrained_model, sess, restorer, True)
             print('Loaded.')
 
         from tensorflow.python.framework import ops
