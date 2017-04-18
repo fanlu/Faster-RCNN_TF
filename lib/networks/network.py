@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+from tensorflow.python import pywrap_tensorflow
 import roi_pooling_layer.roi_pooling_op as roi_pool_op
 import roi_pooling_layer.roi_pooling_op_grad
 from rpn_msr.proposal_layer_tf import proposal_layer as proposal_layer_py
@@ -42,9 +43,40 @@ class Network(object):
     def setup(self):
         raise NotImplementedError('Must be subclassed.')
 
+    def get_variables_in_checkpoint_file(file_name):
+        try:
+            reader = pywrap_tensorflow.NewCheckpointReader(file_name)
+            var_to_shape_map = reader.get_variable_to_shape_map()
+            return var_to_shape_map
+        except Exception as e:  # pylint: disable=broad-except
+            print(str(e))
+            if "corrupted compressed block contents" in str(e):
+                print("It's likely that your checkpoint file has been compressed "
+                      "with SNAPPY.")
+
     def load(self, data_path, session, saver, ignore_missing=False):
         if data_path.endswith('.ckpt'):
-            saver.restore(session, data_path)
+            variables = tf.global_variables()
+            var_keep_dic = self.get_variables_in_checkpoint_file(data_path)
+            variables_to_restore = []
+            var_to_dic = {}
+            print(var_keep_dic)
+            # variables_to_restore = {
+            #     'name_var_0_in_checkpoint': slim.get_unique_variable('var0'),
+            #     'name_var_1_in_checkpoint': slim.get_unique_variable('var1')
+            # }
+            for v in variables:
+                print("cur v name is ", v.name)
+                # exclude the conv weights that are fc weights in vgg16
+                if v.name == 'vgg_16/fc6/weights:0' or v.name == 'vgg_16/fc7/weights:0':
+                    var_to_dic[v.name] = v
+                    continue
+                if v.name.split(':')[0] in var_keep_dic:
+                    print('Varibles restored: %s' % v.name)
+                    variables_to_restore.append(v)
+
+            restorer = tf.train.Saver(variables_to_restore)
+            restorer.restore(session, data_path)
         else:
             data_dict = np.load(data_path).item()
             for key in data_dict:
@@ -213,7 +245,7 @@ class Network(object):
             return tf.transpose(tf.reshape(tf.transpose(input, [0, 3, 1, 2]), [input_shape[0],
                                                                                int(d), tf.cast(
                     tf.cast(input_shape[1], tf.float32) * (
-                    tf.cast(input_shape[3], tf.float32) / tf.cast(d, tf.float32)), tf.int32), input_shape[2]]),
+                        tf.cast(input_shape[3], tf.float32) / tf.cast(d, tf.float32)), tf.int32), input_shape[2]]),
                                 [0, 2, 3, 1], name=name)
 
     @layer

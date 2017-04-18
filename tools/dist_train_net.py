@@ -3,7 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
-from tensorflow.python import pywrap_tensorflow
+
 import argparse
 import sys
 import pprint
@@ -77,18 +77,6 @@ def parse_args():
 
     args = parser.parse_args()
     return args
-
-
-def get_variables_in_checkpoint_file(file_name):
-    try:
-        reader = pywrap_tensorflow.NewCheckpointReader(file_name)
-        var_to_shape_map = reader.get_variable_to_shape_map()
-        return var_to_shape_map
-    except Exception as e:  # pylint: disable=broad-except
-        print(str(e))
-        if "corrupted compressed block contents" in str(e):
-            print("It's likely that your checkpoint file has been compressed "
-                  "with SNAPPY.")
 
 
 def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_model=None, max_iters=None):
@@ -165,7 +153,7 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
                                         cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
         momentum = cfg.TRAIN.MOMENTUM
         opt = tf.train.GradientDescentOptimizer(lr)  #
-        #opt = tf.train.MomentumOptimizer(lr, momentum)
+        # opt = tf.train.MomentumOptimizer(lr, momentum)
 
         _opt = tf.train.SyncReplicasOptimizer(
             opt,
@@ -196,29 +184,11 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
             chief_queue_runner = _opt.get_chief_queue_runner()
             sync_init_op = _opt.get_init_tokens_op()
 
-
-
-        print('Loading initial model weights from {:s}'.format(sw.pretrained_model))
-        variables = tf.global_variables()
-
         # Only initialize the variables that were not initialized when the graph was built
         # sess.run(tf.variables_initializer(variables, name='init'))
-        # var_keep_dic = get_variables_in_checkpoint_file(sw.pretrained_model)
-        # variables_to_restore = []
-        # var_to_dic = {}
-        # # print(var_keep_dic)
-        # for v in variables:
-        #     # exclude the conv weights that are fc weights in vgg16
-        #     if v.name == 'vgg_16/fc6/weights:0' or v.name == 'vgg_16/fc7/weights:0':
-        #         var_to_dic[v.name] = v
-        #         continue
-        #     if v.name.split(':')[0] in var_keep_dic:
-        #         print('Varibles restored: %s' % v.name)
-        #         variables_to_restore.append(v)
-        #
-        # restorer = tf.train.Saver(variables_to_restore)
 
         def load_pretrain(sess):
+            print('Loading initial model weights from {:s}'.format(sw.pretrained_model))
             if sw.pretrained_model is not None:
                 print('Loading pretrained model '
                       'weights from {:s}'.format(sw.pretrained_model))
@@ -237,7 +207,7 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
         sv = tf.train.Supervisor(is_chief=is_chief,
                                  logdir=output_dir,
                                  init_op=init_op,
-                                 # init_fn=load_pretrain,
+                                 init_fn=load_pretrain,
                                  summary_op=None,
                                  global_step=global_step,
                                  saver=saver)
@@ -252,7 +222,7 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
         timer = Timer()
         next_summary_time = time.time() + cfg.TRAIN.save_summaries_secs
         while not sv.should_stop():
-        # for iter in range(max_iters):
+            # for iter in range(max_iters):
             try:
 
                 # get one batch
@@ -304,9 +274,9 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
                     # Determine the next time for running the summary.
                     next_summary_time += cfg.TRAIN.save_summaries_secs
             except:
-              if is_chief:
-                tf.logging.info('Chief got exception while running!')
-              raise
+                if is_chief:
+                    tf.logging.info('Chief got exception while running!')
+                raise
 
 
 if __name__ == '__main__':
@@ -356,16 +326,6 @@ if __name__ == '__main__':
     print('Use network `{:s}` in training'.format(args.network_name))
 
     if args.job_name == 'ps':
-        # `ps` jobs wait for incoming connections from the workers.
-        sess = tf.Session(server.target)
-        if args.pretrained_model is not None:
-            print('Loading pretrained model '
-                  'weights from {:s}'.format(args.pretrained_model))
-            network.load(args.pretrained_model, sess, None, True)
-        # Fresh train directly from ImageNet weights
-        # if is_chief:
-        #     restorer.restore(sess, sw.pretrained_model)
-        print('Loaded.')
         server.join()
     else:
         # `worker` jobs will actually do the work.
