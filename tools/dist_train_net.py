@@ -107,6 +107,7 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
 
     with tf.device(tf.train.replica_device_setter(
             worker_device="/job:worker/task:%d" % args.task_index,
+            ps_device="/job:ps/cpu:0",
             cluster=cluster_spec)):
         global_step = tf.contrib.framework.get_or_create_global_step()
 
@@ -220,36 +221,37 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
         #  'vgg_16/conv4/conv4_1/biases': [512], 'vgg_16/conv5/conv5_2/weights': [3, 3, 512, 512],
         #  'vgg_16/conv5/conv5_3/biases': [512], 'vgg_16/conv5/conv5_3/weights': [3, 3, 512, 512],
         #  'vgg_16/fc7/biases': [4096], 'vgg_16/conv1/conv1_1/biases': [64]}
-        variables_to_restore = {
-            # 'vgg_16/conv4/conv4_1/weights': slim.get_unique_variable('conv4_1/weights:0'),
-            # 'vgg_16/conv5/conv5_1/biases': slim.get_unique_variable('conv5_1/biases:0'),
-            'vgg_16/conv1/conv1_1/weights': tf.get_variable('conv1_1/weights:0', shape=[3, 3, 3, 64]),
-            'vgg_16/conv1/conv1_1/biases': tf.get_variable('conv1_1/biases:0', shape=[64]),
-            'vgg_16/conv1/conv1_2/weights': tf.get_variable('conv1_2/weights:0', shape=[3, 3, 64, 64]),
-            'vgg_16/conv1/conv1_2/biases': tf.get_variable('conv1_2/biases:0', shape=[64]),
-            'vgg_16/conv2/conv2_1/weights': tf.get_variable('conv2_1/weights:0', shape=[3, 3, 64, 128]),
-            'vgg_16/conv2/conv2_1/biases': tf.get_variable('conv2_1/biases:0', shape=[128]),
-            'vgg_16/conv2/conv2_2/weights': tf.get_variable('conv2_2/weights:0', shape=[3, 3, 128, 128]),
-            'vgg_16/conv2/conv2_2/biases': tf.get_variable('conv2_2/biases:0', shape=[128]),
-            'vgg_16/conv3/conv3_1/weights': tf.get_variable('conv3_1/weights:0', shape=[3, 3, 128, 256]),
-            'vgg_16/conv3/conv3_1/biases': tf.get_variable('conv3_1/biases:0', shape=[256]),
-            'vgg_16/conv3/conv3_2/weights': tf.get_variable('conv3_2/weights:0', shape=[3, 3, 256, 256]),
-            'vgg_16/conv3/conv3_2/biases': tf.get_variable('conv3_2/biases:0', shape=[256]),
-            'vgg_16/conv3/conv3_3/weights': tf.get_variable('conv3_3/weights:0', shape=[3, 3, 256, 256]),
-            'vgg_16/conv3/conv3_3/biases': tf.get_variable('conv3_3/biases:0', shape=[256]),
-            'vgg_16/conv4/conv4_1/weights': tf.get_variable('conv4_1/weights:0', shape=[3, 3, 256, 512]),
-            'vgg_16/conv4/conv4_1/biases': tf.get_variable('conv4_1/biases:0', shape=[512]),
-            'vgg_16/conv4/conv4_2/weights': tf.get_variable('conv4_2/weights:0', shape=[3, 3, 512, 512]),
-            'vgg_16/conv4/conv4_2/biases': tf.get_variable('conv4_2/biases:0', shape=[512]),
-            'vgg_16/conv4/conv4_3/weights': tf.get_variable('conv4_3/weights:0', shape=[3, 3, 512, 512]),
-            'vgg_16/conv4/conv4_3/biases': tf.get_variable('conv4_3/biases:0', shape=[512]),
-            'vgg_16/conv5/conv5_1/weights': tf.get_variable('conv5_1/weights:0', shape=[3, 3, 512, 512]),
-            'vgg_16/conv5/conv5_1/biases': tf.get_variable('conv5_1/biases:0', shape=[512]),
-            'vgg_16/conv5/conv5_2/weights': tf.get_variable('conv5_2/weights:0', shape=[3, 3, 512, 512]),
-            'vgg_16/conv5/conv5_2/biases': tf.get_variable('conv5_2/biases:0', shape=[512]),
-            'vgg_16/conv5/conv5_3/weights': tf.get_variable('conv5_3/weights:0', shape=[3, 3, 512, 512]),
-            'vgg_16/conv5/conv5_3/biases': tf.get_variable('conv5_3/biases:0', shape=[512])
-        }
+        with tf.variable_scope("", reuse=True):
+            variables_to_restore = {
+                # 'vgg_16/conv4/conv4_1/weights': slim.get_unique_variable('conv4_1/weights:0'),
+                # 'vgg_16/conv5/conv5_1/biases': slim.get_unique_variable('conv5_1/biases:0'),
+                'vgg_16/conv1/conv1_1/weights': tf.get_variable('conv1_1/weights', shape=[3, 3, 3, 64]),
+                'vgg_16/conv1/conv1_1/biases': tf.get_variable('conv1_1/biases', shape=[64]),
+                'vgg_16/conv1/conv1_2/weights': tf.get_variable('conv1_2/weights', shape=[3, 3, 64, 64]),
+                'vgg_16/conv1/conv1_2/biases': tf.get_variable('conv1_2/biases', shape=[64]),
+                'vgg_16/conv2/conv2_1/weights': tf.get_variable('conv2_1/weights', shape=[3, 3, 64, 128]),
+                'vgg_16/conv2/conv2_1/biases': tf.get_variable('conv2_1/biases', shape=[128]),
+                'vgg_16/conv2/conv2_2/weights': tf.get_variable('conv2_2/weights', shape=[3, 3, 128, 128]),
+                'vgg_16/conv2/conv2_2/biases': tf.get_variable('conv2_2/biases', shape=[128]),
+                'vgg_16/conv3/conv3_1/weights': tf.get_variable('conv3_1/weights', shape=[3, 3, 128, 256]),
+                'vgg_16/conv3/conv3_1/biases': tf.get_variable('conv3_1/biases', shape=[256]),
+                'vgg_16/conv3/conv3_2/weights': tf.get_variable('conv3_2/weights', shape=[3, 3, 256, 256]),
+                'vgg_16/conv3/conv3_2/biases': tf.get_variable('conv3_2/biases', shape=[256]),
+                'vgg_16/conv3/conv3_3/weights': tf.get_variable('conv3_3/weights', shape=[3, 3, 256, 256]),
+                'vgg_16/conv3/conv3_3/biases': tf.get_variable('conv3_3/biases', shape=[256]),
+                'vgg_16/conv4/conv4_1/weights': tf.get_variable('conv4_1/weights', shape=[3, 3, 256, 512]),
+                'vgg_16/conv4/conv4_1/biases': tf.get_variable('conv4_1/biases', shape=[512]),
+                'vgg_16/conv4/conv4_2/weights': tf.get_variable('conv4_2/weights', shape=[3, 3, 512, 512]),
+                'vgg_16/conv4/conv4_2/biases': tf.get_variable('conv4_2/biases', shape=[512]),
+                'vgg_16/conv4/conv4_3/weights': tf.get_variable('conv4_3/weights', shape=[3, 3, 512, 512]),
+                'vgg_16/conv4/conv4_3/biases': tf.get_variable('conv4_3/biases', shape=[512]),
+                'vgg_16/conv5/conv5_1/weights': tf.get_variable('conv5_1/weights', shape=[3, 3, 512, 512]),
+                'vgg_16/conv5/conv5_1/biases': tf.get_variable('conv5_1/biases', shape=[512]),
+                'vgg_16/conv5/conv5_2/weights': tf.get_variable('conv5_2/weights', shape=[3, 3, 512, 512]),
+                'vgg_16/conv5/conv5_2/biases': tf.get_variable('conv5_2/biases', shape=[512]),
+                'vgg_16/conv5/conv5_3/weights': tf.get_variable('conv5_3/weights', shape=[3, 3, 512, 512]),
+                'vgg_16/conv5/conv5_3/biases': tf.get_variable('conv5_3/biases', shape=[512])
+            }
         # for v in variables:
         #     print("cur v name is ", v.name)
         #     # exclude the conv weights that are fc weights in vgg16
@@ -270,11 +272,11 @@ def train(network, imdb, roidb, output_dir, target, cluster_spec, pretrained_mod
                 sw.net.load(sw.pretrained_model, sess, restorer, True)
             print('Loaded.')
 
-        from tensorflow.python.framework import ops
-        graph = ops.get_default_graph()
-        if not is_chief:
-            for op in graph.get_operations():
-                print(op.type, " and ", op.device)
+        # from tensorflow.python.framework import ops
+        # graph = ops.get_default_graph()
+        # if not is_chief:
+        #     for op in graph.get_operations():
+        #         print(op.type, " and ", op.device)
 
         sv = tf.train.Supervisor(is_chief=is_chief,
                                  logdir=output_dir,

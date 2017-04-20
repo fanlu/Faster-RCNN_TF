@@ -102,10 +102,13 @@ class Network(object):
         convolve = lambda i, k: tf.nn.conv2d(i, k, [1, s_h, s_w, 1], padding=padding)
         with tf.variable_scope(name) as scope:
 
-            init_weights = tf.truncated_normal_initializer(0.0, stddev=0.01)
-            init_biases = tf.constant_initializer(0.0)
-            kernel = self.make_var('weights', [k_h, k_w, c_i / group, c_o], init_weights, trainable)
-            biases = self.make_var('biases', [c_o], init_biases, trainable)
+            # init_weights = tf.truncated_normal_initializer(0.0, stddev=0.01)
+            # init_biases = tf.constant_initializer(0.0)
+            # kernel = self.make_var('weights', [k_h, k_w, c_i / group, c_o], None, trainable)
+            # biases = self.make_var('biases', [c_o], None, trainable)
+
+            kernel = tf.get_variable('weights', shape=[k_h, k_w, c_i / group, c_o])
+            biases = tf.get_variable('biases', shape=[c_o])
 
             if group == 1:
                 conv = convolve(input, kernel)
